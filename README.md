@@ -3,14 +3,14 @@
 
  
 
-![Thumbnail](./Marketing/Marketplace/Thumbnail.gif)
+ 
 # A New and More Beautiful Spotify Lyrics Experience
 
 ## Karaoke Lyrics for EVERYONE
 If you don't have Premium, Spotify won't give you any lyrics.
 
-Beautiful Lyrics provides Lyrics to _EVERYONE_ for **FREE**.
-Beautiful Lyrics supports **Karaoke**, _Line_, and Statically synced lyrics with
+Beautiful Lyrics Rebirth provides Lyrics to _EVERYONE_ for **FREE**.
+Beautiful Lyrics supports **Romanization**, _Line_, and Statically synced lyrics with
 additional features like **Background Vocals** and **Side Vocals**.
 
 ## Fullscreen for EVERYONE
