@@ -154,6 +154,17 @@ export default {
 		</svg>
 	`,
 
+	Copy: `
+		<svg role="img" height="16" width="16" aria-hidden="true" viewBox="0 0 16 16" data-encore-id="icon" class="Svg-sc-ytk21e-0 Svg-img-16-icon Copy">
+			<path d="M3 1a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h1v-1.5H3a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v1H13V3a2 2 0 0 0-2-2H3zm2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5zm-.5 2a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-.5.5H5a.5.5 0 0 1-.5-.5V7z"></path>
+		</svg>
+	`,
+	CopiedCheckmark: `
+		<svg role="img" height="16" width="16" aria-hidden="true" viewBox="0 0 16 16" data-encore-id="icon" class="Svg-sc-ytk21e-0 Svg-img-16-icon Copied">
+			<path d="M13.985 2.36a.75.75 0 0 1 .155 1.05l-8.01 11.01a.75.75 0 0 1-1.125.085l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.882 3.882L12.935 2.515a.75.75 0 0 1 1.05-.155z"></path>
+		</svg>
+	`,
+
 	LoadingBrokenHeart: `
 		<div
 			class="Loading"

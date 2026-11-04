@@ -16,8 +16,11 @@ import Icons from "./Icons.ts"
 import {
 	CreateElement,
 	ToggleLanguageRomanization, IsLanguageRomanized, LanguageRomanizationChanged,
-	GetUseFallbackProviders, ToggleUseFallbackProviders, UseFallbackProvidersChanged
+	GetUseFallbackProviders, ToggleUseFallbackProviders, UseFallbackProvidersChanged,
+	SetupCopyLyricsButton
 } from "../Shared.ts"
+
+export { SetupCopyLyricsButton }
 
 // Shared Lyrics Behavior
 export const CreateLyricsRenderer = (

@@ -8,7 +8,7 @@ import "./Kuromoji.js"
 const Kuromoji = (globalThis as any).kuromoji as typeof KuromojiType
 
 // CORS proxy for kuromoji dictionaries (GitHub raw serves with CORS)
-const KUROMOJI_DICT_BASE = "https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/"
+const KUROMOJI_DICT_BASE = "https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict"
 
 // Export our Kuromoji Analyzer (required format so we can be passed into Kuroshiro)
 let Analyzer: (Tokenizer<IpadicFeatures> | undefined)

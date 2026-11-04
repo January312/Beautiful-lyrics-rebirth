@@ -235,8 +235,12 @@ export class LyricsScroller<V extends (BaseVocals | SyncedVocals)> implements Gi
 			this.DetermineLyricBlur()
 		}
 
-		// If we're still scrolling then don't do anything
-		if (this.AutoScrollBlocked && this.Scroller.isScrolling) {
+		// If we're still scrolling or user is selecting lyrics then don't do anything
+		if (
+			(this.AutoScrollBlocked && this.Scroller.isScrolling) ||
+			this.ScrollContainer.classList.contains("copy-lyrics-selecting") ||
+			this.LyricsContainer.classList.contains("copy-lyrics-selecting")
+		) {
 			return
 		}
 

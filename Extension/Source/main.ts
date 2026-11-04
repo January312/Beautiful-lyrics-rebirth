@@ -13,9 +13,14 @@ import {
 	OnSpotifyReady, Spotify,
 	SpotifyPlatform,
 	SpotifyInternalFetch,
+	SpotifyHistory,
 	ShowNotification
 } from "@Spices/Spicetify/Services/Session.ts"
 import { GetInstantStore } from "@Spices/Spicetify/Services/Cache.ts"
+import {
+	Song,
+	SongLyrics
+} from "@Spices/Spicetify/Services/Player/mod.ts"
 
 // Web-Modules
 import { Timeout } from '@Universal/Modules/Scheduler.ts'
@@ -25,10 +30,16 @@ import "./DiscordVerification/mod.ts"
 import "./LyricViews/mod.ts"
 
 // Shared Methods
-import { CreateElement } from "./LyricViews/Shared.ts"
+import {
+	CreateElement,
+	GetLyricsAsText,
+	CopyLyricsToClipboard,
+	IsLanguageRomanized
+} from "./LyricViews/Shared.ts"
 
 // Modules
 import OpenUpdatePopup from "./UpdatePopup/mod.ts"
+import { SetupCopyLyricsSelection } from "./Modules/CopyLyricsSelection.ts"
 
 const Load = async () => {
 	await OnSpotifyReady
@@ -244,6 +255,67 @@ const Load = async () => {
 			() => unbindKeyCombo("shift+b+l>h", OnSaveSpotifyHTML),
 			() => unbindKeyCombo("shift+b+l>c", OnSaveSpotifyCSS)
 		)
+	}
+
+	{ // Handle Copy Lyrics features
+		// Initialize dragging mouse to select lines and copy lyrics (matching copy-lyrics extension)
+		SetupCopyLyricsSelection(GlobalMaid)
+
+		// Spicetify Context Menu Item on currently playing song
+		if (Spotify?.ContextMenu?.Item) {
+			const copyLyricsContextItem = new Spotify.ContextMenu.Item(
+				"Copy Lyrics",
+				() => {
+					CopyLyricsToClipboard()
+				},
+				(uris) => {
+					if (SongLyrics === undefined || Song === undefined) return false
+					return (uris.length === 1 && uris[0] === Song.Uri)
+				},
+				"copy"
+			)
+			copyLyricsContextItem.register()
+			GlobalMaid.Give(() => copyLyricsContextItem.deregister())
+		}
+
+		// Keyboard shortcut shift+b+l>l
+		const OnCopyLyricsShortcut = () => {
+			CopyLyricsToClipboard()
+		}
+		bindKeyCombo("shift+b+l>l", OnCopyLyricsShortcut)
+		GlobalMaid.Give(() => unbindKeyCombo("shift+b+l>l", OnCopyLyricsShortcut))
+
+		// Native copy event listener (Ctrl+C / Cmd+C when on Beautiful Lyrics view with no text selection)
+		const OnDocumentCopy = (event: ClipboardEvent) => {
+			if (
+				document.activeElement?.tagName === "INPUT" ||
+				document.activeElement?.tagName === "TEXTAREA" ||
+				(document.activeElement as HTMLElement)?.isContentEditable
+			) {
+				return
+			}
+			const selection = window.getSelection()?.toString()
+			if (selection && selection.trim().length > 0) {
+				return
+			}
+			const isViewingLyrics =
+				Boolean(SpotifyHistory?.location?.pathname?.startsWith("/BeautifulLyrics")) ||
+				document.querySelector("#BeautifulLyrics-CardView, .BeautifulLyricsPage") !== null
+			if (
+				isViewingLyrics &&
+				SongLyrics !== undefined
+			) {
+				const isRomanized = (SongLyrics.RomanizedLanguage !== undefined) && IsLanguageRomanized(SongLyrics.RomanizedLanguage)
+				const lyricsText = GetLyricsAsText(SongLyrics, isRomanized)
+				if (lyricsText && lyricsText.trim().length > 0) {
+					event.preventDefault()
+					event.clipboardData?.setData("text/plain", lyricsText)
+					ShowNotification("Copied lyrics to clipboard", "success", 3)
+				}
+			}
+		}
+		document.addEventListener("copy", OnDocumentCopy)
+		GlobalMaid.Give(() => document.removeEventListener("copy", OnDocumentCopy))
 	}
 
 	// Only opens the Update Popup IF we haven't seen it yet

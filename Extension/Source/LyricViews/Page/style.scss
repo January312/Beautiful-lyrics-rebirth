@@ -22,13 +22,19 @@ body:has(.BeautifulLyricsPage) {
 	}
 
 	#Close svg {
-		height: calc(var(--ViewControlSize) * 0.4);
+		height: calc(var(--ViewControlSize) * 0.45);
 		width: auto;
 		aspect-ratio: 1;
 	}
 
 	#Settings svg {
-		height: calc(var(--ViewControlSize) * 0.4);
+		height: calc(var(--ViewControlSize) * 0.45);
+		width: auto;
+		aspect-ratio: 1;
+	}
+
+	#CopyLyrics svg {
+		height: calc(var(--ViewControlSize) * 0.45);
 		width: auto;
 		aspect-ratio: 1;
 	}
@@ -679,6 +685,12 @@ body:has(.BeautifulLyricsPage.Fullscreen) {
 						aspect-ratio: 1;
 					}
 
+					#CopyLyrics svg {
+						height: calc(var(--ViewControlSize) * 0.475);
+						width: auto;
+						aspect-ratio: 1;
+					}
+
 					#SmallerView {
 						svg.Small {
 							height: calc(var(--ViewControlSize) * 0.45);
@@ -695,6 +707,18 @@ body:has(.BeautifulLyricsPage.Fullscreen) {
 					
 					#Fullscreen svg {
 						height: calc(var(--ViewControlSize) * 0.49); // 22px
+						width: auto;
+						aspect-ratio: 1;
+					}
+
+					#Settings svg {
+						height: calc(var(--ViewControlSize) * 0.475);
+						width: auto;
+						aspect-ratio: 1;
+					}
+
+					#Close svg {
+						height: calc(var(--ViewControlSize) * 0.45);
 						width: auto;
 						aspect-ratio: 1;
 					}

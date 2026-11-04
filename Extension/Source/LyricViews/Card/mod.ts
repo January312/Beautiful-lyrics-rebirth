@@ -17,6 +17,7 @@ import {
 	CreateElement,
 	ToggleLanguageRomanization, IsLanguageRomanized, LanguageRomanizationChanged,
 	GetUseFallbackProviders, ToggleUseFallbackProviders, UseFallbackProvidersChanged,
+	SetupCopyLyricsButton,
 	Store
 } from "../Shared.ts"
 
@@ -60,8 +61,8 @@ const FallbackProviderIcons = {
 }
 const ExpandedControls = `
 	<div class="Controls">
+		<button id="CopyLyrics" class="ViewControl"></button>
 		<button id="Romanize" class="ViewControl"></button>
-		<button id="FallbackProviders" class="ViewControl"></button>
 		<button id="Page" class="ViewControl">
 			<svg role="img" height="16" width="16" aria-hidden="true" viewBox="0 0 16 16" data-encore-id="icon" class="Svg-sc-ytk21e-0 Svg-img-16-icon"><path d="M14.55 1c.8 0 1.45.65 1.45 1.45V7h-1.5V2.5h-13v11h5.507V15H1.45C.65 15 0 14.35 0 13.55V2.45C0 1.65.65 1 1.45 1h13.1z"></path><path d="M16 9.757a.75.75 0 0 0-.75-.75H9.068L6.56 6.5h1.385a.75.75 0 1 0 0-1.5H4v3.946a.75.75 0 0 0 1.5 0V7.561l3.076 3.075v3.614c0 .414.336.75.75.75h5.925a.75.75 0 0 0 .75-.75V9.757z"></path>
 			</svg>
@@ -85,15 +86,16 @@ export default class CardView implements Giveable {
 	private readonly ShowLyricsButton: HTMLButtonElement
 	private readonly ExpandedControls: {
 		Container: HTMLDivElement;
+		CopyLyricsButton: HTMLButtonElement;
 		RomanizeButton: HTMLButtonElement;
-		FallbackProvidersButton: HTMLButtonElement;
+		FallbackProvidersButton?: HTMLButtonElement | null;
 		OpenPageButton: HTMLButtonElement;
 		CloseButton: HTMLButtonElement;
 	}
 	// deno-lint-ignore no-explicit-any
 	private readonly RomanizeTooltip: any
 	// deno-lint-ignore no-explicit-any
-	private readonly FallbackTooltip: any
+	private readonly FallbackTooltip?: any
 	private readonly LyricsContainer: HTMLDivElement
 	private readonly LyricsContentContainer: HTMLDivElement
 
@@ -114,11 +116,15 @@ export default class CardView implements Giveable {
 			const expandedControlsContainer = this.Maid.Give(CreateElement<HTMLDivElement>(ExpandedControls))
 			this.ExpandedControls = {
 				Container: expandedControlsContainer,
+				CopyLyricsButton: expandedControlsContainer.querySelector<HTMLButtonElement>("#CopyLyrics")!,
 				RomanizeButton: expandedControlsContainer.querySelector<HTMLButtonElement>("#Romanize")!,
-				FallbackProvidersButton: expandedControlsContainer.querySelector<HTMLButtonElement>("#FallbackProviders")!,
+				FallbackProvidersButton: expandedControlsContainer.querySelector<HTMLButtonElement>("#FallbackProviders"),
 				OpenPageButton: expandedControlsContainer.querySelector<HTMLButtonElement>("#Page")!,
 				CloseButton: expandedControlsContainer.querySelector<HTMLButtonElement>("#Close")!,
 			}
+
+			// Setup our copy lyrics button
+			SetupCopyLyricsButton(this.ExpandedControls.CopyLyricsButton, this.Maid)
 
 			// Remove our romanize-button if we aren't a romanized lyric
 			if (SongLyrics!.RomanizedLanguage === undefined) {
@@ -164,7 +170,7 @@ export default class CardView implements Giveable {
 			this.RomanizeTooltip = romanizeTooltip
 		}
 
-		{
+		if (this.ExpandedControls.FallbackProvidersButton) {
 			const fallbackTooltip = Spotify.Tippy(
 				this.ExpandedControls.FallbackProvidersButton,
 				{
@@ -206,10 +212,10 @@ export default class CardView implements Giveable {
 		}
 
 		// Handle fallback providers updates
-		{
+		if (this.ExpandedControls.FallbackProvidersButton && this.FallbackTooltip) {
 			const SetContent = (enabled: boolean) => {
 				this.FallbackTooltip.setContent(enabled ? "Disable Fallback Providers" : "Enable Fallback Providers")
-				this.ExpandedControls.FallbackProvidersButton.innerHTML = (
+				this.ExpandedControls.FallbackProvidersButton!.innerHTML = (
 					enabled
 					? FallbackProviderIcons.Enabled
 					: FallbackProviderIcons.Disabled
@@ -255,10 +261,12 @@ export default class CardView implements Giveable {
 			}
 
 			// Handle our fallback providers button
-			this.ExpandedControls.FallbackProvidersButton.addEventListener(
-				"click",
-				() => ToggleUseFallbackProviders(!GetUseFallbackProviders())
-			)
+			if (this.ExpandedControls.FallbackProvidersButton) {
+				this.ExpandedControls.FallbackProvidersButton.addEventListener(
+					"click",
+					() => ToggleUseFallbackProviders(!GetUseFallbackProviders())
+				)
+			}
 		}
 
 		// Handle our overall state

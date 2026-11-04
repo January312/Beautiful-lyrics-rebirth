@@ -35,6 +35,7 @@
 	border: none;
 	border-radius: 100rem;
 	aspect-ratio: 1;
+	flex-shrink: 0;
 
 	-webkit-app-region: no-drag;
 
@@ -46,6 +47,14 @@
 
 	-webkit-box-align: center;
 	-webkit-box-pack: center;
+
+	cursor: pointer;
+	transition: color 0.15s ease, background-color 0.15s ease;
+
+	&:hover {
+		color: #ffffff;
+		background: rgb(40 40 40 / 85%);
+	}
 
 	svg {
 		fill: currentColor;

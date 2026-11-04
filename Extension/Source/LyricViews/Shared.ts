@@ -1,5 +1,6 @@
 // Imported Types
-import type { RomanizedLanguage } from "@Spices/Spicetify/Services/Player/mod.ts"
+import type { RomanizedLanguage, TransformedLyrics } from "@Spices/Spicetify/Services/Player/mod.ts"
+import type { SyllableMetadata } from "@Universal/Types/Lyrics.ts"
 
 // NPM Packages
 import seedrandom from "npm:seedrandom"
@@ -14,10 +15,15 @@ import { OnPreRender } from "@Universal/Modules/Scheduler.ts"
 
 // Spices
 import { GetInstantStore, GetDynamicStoreItem, SetDynamicStoreItem } from "@Spices/Spicetify/Services/Cache.ts"
+import { Spotify, SpotifyPlatform, ShowNotification } from "@Spices/Spicetify/Services/Session.ts"
 import {
 	Song, SongChanged,
-	SongContext, SongContextChanged
+	SongContext, SongContextChanged,
+	SongLyrics, HaveSongLyricsLoaded
 } from "@Spices/Spicetify/Services/Player/mod.ts"
+
+// Icons
+import Icons from "./Icons.ts"
 
 // Shaders
 import {
@@ -33,7 +39,7 @@ export const Store = GetInstantStore<
 		RomanizedLanguages: {[key in RomanizedLanguage]: boolean};
 	}
 >(
-	"BeautifulLyrics/LyricViews", 2,
+	"BeautifulLyrics/LyricViews", 3,
 	{
 		CardLyricsVisible: false,
 		PlaybarDetailsHidden: false,
@@ -43,6 +49,9 @@ export const Store = GetInstantStore<
 			Korean: false,
 			Hindi: false,
 			Punjabi: false,
+			Cyrillic: false,
+			Greek: false,
+			Arabic: false,
 		}
 	}
 )
@@ -59,6 +68,18 @@ export const CreateElement = <E = HTMLElement>(text: string) => {
 }
 
 export const ToggleLanguageRomanization = (language: RomanizedLanguage, isRomanized: boolean) => {
+	if (!Store.Items.RomanizedLanguages) {
+		Store.Items.RomanizedLanguages = {
+			Chinese: false,
+			Japanese: false,
+			Korean: false,
+			Hindi: false,
+			Punjabi: false,
+			Cyrillic: false,
+			Greek: false,
+			Arabic: false,
+		}
+	}
 	// Determine whether or not we've even changed in state
 	if (Store.Items.RomanizedLanguages[language] !== isRomanized) {
 		// Update ourselves
@@ -73,7 +94,180 @@ export const ToggleLanguageRomanization = (language: RomanizedLanguage, isRomani
 }
 
 export const IsLanguageRomanized = (language: RomanizedLanguage): boolean => {
-	return (Store.Items.RomanizedLanguages[language] === true)
+	return (Store.Items.RomanizedLanguages?.[language] === true)
+}
+
+// Copy Lyrics Methods
+export const GetLyricsAsText = (lyrics: TransformedLyrics, isRomanized = false): string => {
+	if (lyrics.Type === "Static") {
+		return lyrics.Lines
+			.map(line => ((isRomanized && line.RomanizedText) || line.Text).trim())
+			.join("\n")
+			.replace(/\n{3,}/g, "\n\n")
+			.trim()
+	} else if (lyrics.Type === "Line") {
+		const lines: string[] = []
+		for (const item of lyrics.Content) {
+			if (item.Type === "Vocal") {
+				const text = ((isRomanized && item.RomanizedText) || item.Text).trim()
+				if (text.length > 0) {
+					lines.push(text)
+				}
+			} else if (item.Type === "Interlude") {
+				if (lines.length > 0 && lines[lines.length - 1] !== "") {
+					lines.push("")
+				}
+			}
+		}
+		return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim()
+	} else if (lyrics.Type === "Syllable") {
+		const formatSyllables = (syllables: SyllableMetadata[]): string => {
+			if (!syllables || syllables.length === 0) return ""
+			let text = (isRomanized && syllables[0].RomanizedText) || syllables[0].Text
+			for (let index = 1; index < syllables.length; index += 1) {
+				const syl = syllables[index]
+				const prevSyl = syllables[index - 1]
+				const sylText = (isRomanized && syl.RomanizedText) || syl.Text
+				if (prevSyl?.IsPartOfWord || text.endsWith(" ") || sylText.startsWith(" ")) {
+					text += sylText
+				} else {
+					text += ` ${sylText}`
+				}
+			}
+			return text.trim()
+		}
+
+		const lines: string[] = []
+		for (const item of lyrics.Content) {
+			if (item.Type === "Vocal") {
+				let text = formatSyllables(item.Lead.Syllables)
+				if (item.Background !== undefined && item.Background.length > 0) {
+					for (const bg of item.Background) {
+						const bgText = formatSyllables(bg.Syllables)
+						if (bgText.length > 0) {
+							text += ` (${bgText})`
+						}
+					}
+				}
+				if (text.length > 0) {
+					lines.push(text)
+				}
+			} else if (item.Type === "Interlude") {
+				if (lines.length > 0 && lines[lines.length - 1] !== "") {
+					lines.push("")
+				}
+			}
+		}
+		return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim()
+	}
+
+	return ""
+}
+
+export const WriteTextToClipboard = async (text: string): Promise<boolean> => {
+	try {
+		if (SpotifyPlatform?.ClipboardAPI?.copy) {
+			await SpotifyPlatform.ClipboardAPI.copy(text)
+			return true
+		}
+	} catch (_) {}
+	try {
+		if (navigator.clipboard?.writeText) {
+			await navigator.clipboard.writeText(text)
+			return true
+		}
+		throw new Error("Clipboard API unavailable")
+	} catch (_) {
+		try {
+			const textarea = document.createElement("textarea")
+			textarea.value = text
+			textarea.style.position = "fixed"
+			textarea.style.top = "0"
+			textarea.style.left = "0"
+			textarea.style.width = "1px"
+			textarea.style.height = "1px"
+			textarea.style.padding = "0"
+			textarea.style.border = "none"
+			textarea.style.outline = "none"
+			textarea.style.boxShadow = "none"
+			textarea.style.background = "transparent"
+			textarea.style.opacity = "0"
+			textarea.style.pointerEvents = "none"
+			document.body.appendChild(textarea)
+			textarea.focus()
+			textarea.select()
+			const successful = document.execCommand("copy")
+			document.body.removeChild(textarea)
+			return successful
+		} catch (fallbackError) {
+			console.error("Failed to copy to clipboard:", fallbackError)
+			return false
+		}
+	}
+}
+
+export const CopyLyricsToClipboard = async (): Promise<boolean> => {
+	if (HaveSongLyricsLoaded === false) {
+		ShowNotification("Lyrics are still loading...", "info", 3)
+		return false
+	}
+
+	if (SongLyrics === undefined) {
+		ShowNotification("No lyrics available to copy", "warning", 3)
+		return false
+	}
+
+	const isRomanized = (SongLyrics.RomanizedLanguage !== undefined) && IsLanguageRomanized(SongLyrics.RomanizedLanguage)
+	const lyricsText = GetLyricsAsText(SongLyrics, isRomanized)
+	if (!lyricsText || lyricsText.trim().length === 0) {
+		ShowNotification("No lyrics available to copy", "warning", 3)
+		return false
+	}
+
+	const copied = await WriteTextToClipboard(lyricsText)
+	if (copied) {
+		ShowNotification("Copied lyrics to clipboard", "success", 3)
+		return true
+	} else {
+		ShowNotification("Failed to copy lyrics to clipboard", "error", 5)
+		return false
+	}
+}
+
+export const SetupCopyLyricsButton = (
+	copyButton: HTMLButtonElement,
+	maid: Maid
+) => {
+	if (!copyButton) return
+	copyButton.innerHTML = Icons.Copy
+	const tooltip = Spotify.Tippy(
+		copyButton,
+		{
+			...Spotify.TippyProps,
+			content: "Copy Lyrics"
+		}
+	)
+	maid.Give(() => tooltip?.destroy?.())
+
+	let resetTimeout: ReturnType<typeof setTimeout> | undefined
+	const OnClick = async () => {
+		const success = await CopyLyricsToClipboard()
+		if (success) {
+			tooltip?.setContent?.("Copied!")
+			copyButton.innerHTML = Icons.CopiedCheckmark
+			if (resetTimeout !== undefined) globalThis.clearTimeout(resetTimeout)
+			resetTimeout = globalThis.setTimeout(() => {
+				tooltip?.setContent?.("Copy Lyrics")
+				copyButton.innerHTML = Icons.Copy
+			}, 2000)
+		}
+	}
+
+	copyButton.addEventListener("click", OnClick)
+	maid.Give(() => {
+		copyButton.removeEventListener("click", OnClick)
+		if (resetTimeout !== undefined) globalThis.clearTimeout(resetTimeout)
+	})
 }
 
 // Fallback Providers Toggle
@@ -81,34 +275,100 @@ const FallbackProvidersKey = "UseFallbackProviders"
 const UseFallbackProvidersChangedSignal = new Signal<(enabled: boolean) => void>()
 export const UseFallbackProvidersChanged = UseFallbackProvidersChangedSignal.GetEvent()
 
-export const GetUseFallbackProviders = (): boolean => (
-	GetDynamicStoreItem<boolean>("BeautifulLyrics", FallbackProvidersKey) ?? true
-)
+export const GetUseFallbackProviders = (): boolean => {
+	const val = GetDynamicStoreItem<string | boolean>("BeautifulLyrics", FallbackProvidersKey)
+	if (val === undefined || val === null) return true
+	return val === true || val === "true"
+}
 
 export const ToggleUseFallbackProviders = (enabled: boolean): void => {
 	const current = GetUseFallbackProviders()
 	if (current !== enabled) {
 		SetDynamicStoreItem("BeautifulLyrics", FallbackProvidersKey, String(enabled))
 		UseFallbackProvidersChangedSignal.Fire(enabled)
+		window.dispatchEvent(new CustomEvent("beautiful-lyrics:provider-changed"))
 	}
 }
 
 // Provider Selection
-export type ProviderOption = "auto" | "lrclib" | "spotify" | "lyricsovh" | "betterlyrics-unison" | "betterlyrics-unison-line" | "bini" | "bini-line"
+export type ProviderOption =
+	| "auto"
+	| "txw"
+	| "spicylyrics"
+	| "lrcred"
+	| "musixmatch"
+	| "musixmatch-search"
+	| "spotify"
+	| "amlldb"
+	| "qq"
+	| "kugou"
+	| "netease"
+	| "deezer"
+	| "youtube"
+	| "genius"
+	| "lrclib"
+	| "betterlyrics-unison"
+	| "betterlyrics-unison-line"
+	| "betterlyrics"
+	| "betterlyrics-kugou"
+	| "betterlyrics-legacy"
+	| "betterlyrics-qq"
+	| "bini"
+	| "bini-line"
+	| "lyricsovh"
+
 export const ProviderOptions: ProviderOption[] = [
-	"auto", "lrclib", "spotify", "lyricsovh",
-	"betterlyrics-unison", "betterlyrics-unison-line",
-	"bini", "bini-line"
+	"auto",
+	"txw",
+	"spicylyrics",
+	"lrcred",
+	"musixmatch",
+	"musixmatch-search",
+	"spotify",
+	"amlldb",
+	"qq",
+	"kugou",
+	"netease",
+	"deezer",
+	"youtube",
+	"genius",
+	"lrclib",
+	"betterlyrics-unison",
+	"betterlyrics-unison-line",
+	"betterlyrics",
+	"betterlyrics-kugou",
+	"betterlyrics-legacy",
+	"betterlyrics-qq",
+	"bini",
+	"bini-line",
+	"lyricsovh",
 ]
+
 export const ProviderLabels: Record<ProviderOption, string> = {
-	auto: "Auto (Default)",
-	lrclib: "LRCLIB",
+	auto: "Auto (lyrics.txw.qzz.io + fallbacks)",
+	txw: "Beautiful Lyrics Reborn (txw.qzz.io)",
+	spicylyrics: "SpicyLyrics",
+	lrcred: "lrc.red (Vivi Music - TTML/LRC)",
+	musixmatch: "Musixmatch",
+	"musixmatch-search": "Musixmatch (Search)",
 	spotify: "Spotify",
-	lyricsovh: "Lyrics.ovh",
+	amlldb: "Apple Music / AMLLDB",
+	qq: "QQ Music (QQ 音乐)",
+	kugou: "Kugou (酷狗音乐)",
+	netease: "Netease (网易云音乐)",
+	deezer: "Deezer",
+	youtube: "YouTube",
+	genius: "Genius",
+	lrclib: "LRCLIB",
 	"betterlyrics-unison": "Better Lyrics Unison",
 	"betterlyrics-unison-line": "Better Lyrics Unison (LINE)",
+	betterlyrics: "BetterLyrics (TTML)",
+	"betterlyrics-kugou": "BetterLyrics (Kugou)",
+	"betterlyrics-legacy": "BetterLyrics (Legacy)",
+	"betterlyrics-qq": "BetterLyrics (QQ)",
 	bini: "BiniLyrics",
 	"bini-line": "BiniLyrics (LINE)",
+	lyricsovh: "Lyrics.ovh",
 }
 
 const SelectedProviderKey = "SelectedProvider"
@@ -187,6 +447,50 @@ export const SetFontSize = (px: number): void => {
 		document.documentElement.style.removeProperty("--bl-font-size")
 	}
 }
+
+// Lyrics Sync Animation (Metro/Fluid from Vivi Music, Karaoke, Bouncy, Subtle, Classic)
+export type LyricsAnimationMode = "fluid" | "karaoke" | "bouncy" | "subtle" | "classic"
+
+export const LyricsAnimationLabels: Record<LyricsAnimationMode, string> = {
+	fluid: "Fluid / Metro (Vivi Music)",
+	karaoke: "Apple Music Karaoke (Sweep)",
+	bouncy: "Kinetic Pop (Bouncy Spring)",
+	subtle: "Subtle Fade",
+	classic: "Classic (No animation)",
+}
+
+const LyricsAnimationKey = "LyricsAnimation"
+export const GetLyricsAnimation = (): LyricsAnimationMode => (
+	GetDynamicStoreItem<LyricsAnimationMode>("BeautifulLyrics", LyricsAnimationKey) ?? "fluid"
+)
+
+export const ApplyLyricsAnimation = (mode: LyricsAnimationMode): void => {
+	const modes: LyricsAnimationMode[] = ["fluid", "karaoke", "bouncy", "subtle", "classic"]
+	for (const m of modes) {
+		document.documentElement.classList.remove(`bl-anim-${m}`)
+	}
+	document.documentElement.classList.add(`bl-anim-${mode}`)
+}
+
+export const SetLyricsAnimation = (mode: LyricsAnimationMode): void => {
+	SetDynamicStoreItem("BeautifulLyrics", LyricsAnimationKey, mode)
+	ApplyLyricsAnimation(mode)
+}
+
+// Active Lyric Scale Slider (100% - 120%, default 106%)
+const LyricsAnimationScaleKey = "LyricsAnimationScale"
+export const GetLyricsAnimationScale = (): number => {
+	const v = GetDynamicStoreItem<string>("BeautifulLyrics", LyricsAnimationScaleKey)
+	return v ? Number(v) : 106
+}
+export const SetLyricsAnimationScale = (pct: number): void => {
+	SetDynamicStoreItem("BeautifulLyrics", LyricsAnimationScaleKey, String(pct))
+	document.documentElement.style.setProperty("--bl-active-scale", String(pct / 100))
+}
+
+// Initialize styles on load
+ApplyLyricsAnimation(GetLyricsAnimation())
+SetLyricsAnimationScale(GetLyricsAnimationScale())
 
 // Handle applying our dynamic-background
 const BackgroundClassName = "BeautifulLyricsBackground"

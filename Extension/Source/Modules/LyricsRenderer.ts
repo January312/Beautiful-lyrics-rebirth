@@ -249,7 +249,8 @@ export default class LyricsRenderer implements Giveable {
 		}
 		
 		// Define whether or not our lyrics ended
-		scroller.SetLyricsEnded(timestamp >= lyricsEndTime)
+		const validEndTime = (lyricsEndTime > 0 && !isNaN(lyricsEndTime)) ? lyricsEndTime : Infinity
+		scroller.SetLyricsEnded(timestamp >= validEndTime)
 
 		// If we did skip then we need to tell the scroller that
 		if (skipped) {

@@ -46,7 +46,7 @@ import Slider from "../../Components/Slider.ts"
 import Button from "../../Components/Button.ts"
 
 // Our Modules
-import { CreateLyricsRenderer, SetupRomanizationButton, SetupFallbackProvidersButton } from "./Shared.ts"
+import { CreateLyricsRenderer, SetupRomanizationButton, SetupFallbackProvidersButton, SetupCopyLyricsButton } from "./Shared.ts"
 import { ShowSettingsModal } from "./SettingsModal.ts"
 import { CreateElement, GetCoverArtForSong, ApplyDynamicBackground } from "../Shared.ts"
 import LyricViewIcons from "../Icons.ts"
@@ -111,8 +111,8 @@ const Container = `
 					</div>
 					<div class="ViewControls">
 						<button id="AddToPlaylist" class="ViewControl">${Icons.AddToPlaylist}</button>
+						<button id="CopyLyrics" class="ViewControl"></button>
 						<button id="Romanize" class="ViewControl"></button>
-						<button id="FallbackProviders" class="ViewControl"></button>
 						<button id="SmallerView" class="ViewControl"></button>
 						<button id="Fullscreen" class="ViewControl">${LyricViewIcons.FullscreenOpen}</button>
 						<button id="Settings" class="ViewControl">${Icons.Settings}</button>
@@ -946,6 +946,7 @@ export default class PageView implements Giveable {
 			{
 				// Grab our controls
 				const addToPlaylistButton = viewControls.querySelector<HTMLButtonElement>("#AddToPlaylist")!
+				const copyLyricsButton = viewControls.querySelector<HTMLButtonElement>("#CopyLyrics")!
 				const romanizeButton = viewControls.querySelector<HTMLButtonElement>("#Romanize")!
 				const fallbackButton = viewControls.querySelector<HTMLButtonElement>("#FallbackProviders")!
 				const fullscreenButton = viewControls.querySelector<HTMLButtonElement>("#Fullscreen")!
@@ -953,6 +954,9 @@ export default class PageView implements Giveable {
 				const closeButton = viewControls.querySelector<HTMLButtonElement>("#Close")!
 				const settingsButton = viewControls.querySelector<HTMLButtonElement>("#Settings")!
 				// const toggleDetailsButton = viewControls.querySelector<HTMLButtonElement>("#ToggleDetails")!
+
+				// Setup our copy lyrics button
+				SetupCopyLyricsButton(copyLyricsButton, this.Maid)
 
 				// Handle our add to playlist button
 				{
@@ -1149,8 +1153,10 @@ export default class PageView implements Giveable {
 				// Setup our romanization button
 				SetupRomanizationButton(romanizeButton, UpdateLyricsRenderer, this.Maid)
 
-				// Setup our fallback providers button
-				SetupFallbackProvidersButton(fallbackButton, this.Maid)
+				// Setup our fallback providers button if present
+				if (fallbackButton !== null) {
+					SetupFallbackProvidersButton(fallbackButton, this.Maid)
+				}
 
 				// Handle our settings button
 				{

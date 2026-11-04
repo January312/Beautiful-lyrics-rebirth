@@ -159,7 +159,8 @@ export default class SyllableVocals implements SyncedVocals, Giveable {
 
 		// Define our start/end times
 		this.StartTime = syllablesMetadata[0].StartTime
-		this.Duration = (
+		this.Duration = Math.max(
+			0.2,
 			syllablesMetadata[syllablesMetadata.length - 1].EndTime
 			- this.StartTime
 		)

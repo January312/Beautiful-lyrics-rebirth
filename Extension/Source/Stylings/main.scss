@@ -124,3 +124,34 @@ body:has(.SliderBar.Active) {
 		filter: saturate(1.5) brightness(var(--bl-bg-darkness, 0.8)); // Blur-related
 	}
 }
+
+/* Copy Lyrics by dragging mouse */
+.lyrics-lyrics-contentContainer:has(.lyrics-lyricsContent-lyric),
+.main-nowPlayingView-lyricsContent,
+.lyrics-lyricsContent-lyric,
+.LyricsScrollContainer,
+.Lyrics,
+.VocalsGroup,
+.Vocals,
+.Lyric,
+.Word,
+.Letter,
+.Line,
+.Syllable,
+.Static {
+	-webkit-user-select: text !important;
+	-moz-user-select: text !important;
+	user-select: text !important;
+}
+
+.lyrics-lyricsContent-description,
+.lyrics-lyricsContent-provider {
+	-webkit-user-select: none !important;
+	-moz-user-select: none !important;
+	user-select: none !important;
+}
+
+.copy-lyrics-selecting,
+.copy-lyrics-selecting * {
+	cursor: text !important;
+}

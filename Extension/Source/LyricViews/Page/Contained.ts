@@ -13,7 +13,7 @@ import {
 import { Song, SongChanged } from "@Spices/Spicetify/Services/Player/mod.ts"
 
 // Our Modules
-import { CreateLyricsRenderer, SetupRomanizationButton, SetupFallbackProvidersButton } from "./Shared.ts"
+import { CreateLyricsRenderer, SetupRomanizationButton, SetupFallbackProvidersButton, SetupCopyLyricsButton } from "./Shared.ts"
 import { ShowSettingsModal } from "./SettingsModal.ts"
 import { CreateElement, ApplyDynamicBackground } from "../Shared.ts"
 import Icons from "./Icons.ts"
@@ -26,8 +26,8 @@ const Container = `
 `
 const Header = `
 	<div class="ViewControls">
+		<button id="CopyLyrics" class="ViewControl"></button>
 		<button id="Romanize" class="ViewControl"></button>
-		<button id="FallbackProviders" class="ViewControl"></button>
 		<button id="Cinema" class="ViewControl">
 			<svg role="img" height="16" width="16" aria-hidden="true" viewBox="0 0 16 16" data-encore-id="icon" class="Svg-sc-ytk21e-0 Svg-img-16-icon">
 				<path d="M14.55 1c.8 0 1.45.65 1.45 1.45V7h-1.5V2.5h-13v11h5.507V15H1.45C.65 15 0 14.35 0 13.55V2.45C0 1.65.65 1 1.45 1h13.1z"></path><path d="M16 9.757a.75.75 0 0 0-.75-.75H9.068L6.56 6.5h1.385a.75.75 0 1 0 0-1.5H4v3.946a.75.75 0 0 0 1.5 0V7.561l3.076 3.075v3.614c0 .414.336.75.75.75h5.925a.75.75 0 0 0 .75-.75V9.757z"></path>
@@ -79,11 +79,15 @@ export default class PageView implements Giveable {
 		// Handle our controls
 		{
 			// Grab our controls
+			const copyButton = header.querySelector<HTMLButtonElement>("#CopyLyrics")!
 			const changeButton = header.querySelector<HTMLButtonElement>("#Cinema")!
 			const romanizeButton = header.querySelector<HTMLButtonElement>("#Romanize")!
 			const fallbackButton = header.querySelector<HTMLButtonElement>("#FallbackProviders")!
 			const settingsButton = header.querySelector<HTMLButtonElement>("#Settings")!
 			const closeButton = header.querySelector<HTMLButtonElement>("#Close")!
+
+			// Setup our copy lyrics button
+			SetupCopyLyricsButton(copyButton, this.Maid)
 
 			// Handle our close button
 			{
@@ -122,8 +126,10 @@ export default class PageView implements Giveable {
 			// Setup our romanization button
 			SetupRomanizationButton(romanizeButton, UpdateLyricsRenderer, this.Maid)
 
-			// Setup our fallback providers button
-			SetupFallbackProvidersButton(fallbackButton, this.Maid)
+			// Setup our fallback providers button if present
+			if (fallbackButton !== null) {
+				SetupFallbackProvidersButton(fallbackButton, this.Maid)
+			}
 
 			// Handle our settings button
 			{

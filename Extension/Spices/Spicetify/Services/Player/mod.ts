@@ -30,7 +30,12 @@ import {
 	FetchLRCLIBLyrics, FetchLRCLIBByISRC, FetchDirectSpotifyLyrics,
 	FetchLyricsOvh,
 	FetchBetterLyricsUnison, FetchBetterLyricsUnisonLine,
-	FetchBiniLyrics, FetchBiniLyricsLine
+	FetchBiniLyrics, FetchBiniLyricsLine,
+	FetchMusixmatchLyrics, FetchMusixmatchSearchLyrics,
+	FetchAMLLDBLyrics, FetchGeniusLyrics, FetchDeezerLyrics, FetchYouTubeLyrics,
+	FetchNeteaseLyrics, FetchQQMusicLyrics, FetchKugouLyrics,
+	FetchBetterLyricsTTML, FetchBetterLyricsKugou, FetchBetterLyricsLegacy, FetchBetterLyricsQQ,
+	FetchTxwLyrics, FetchLrcRedLyrics
 } from "./Providers.ts"
 
 // Re-export some useful types
@@ -399,9 +404,11 @@ const FilterSongName = (songName: string): string => {
 
 // Fallback providers toggle
 const FallbackProvidersKey = "UseFallbackProviders"
-export const GetUseFallbackProviders = (): boolean => (
-	GetDynamicStoreItem<boolean>("BeautifulLyrics", FallbackProvidersKey) ?? true
-)
+export const GetUseFallbackProviders = (): boolean => {
+	const val = GetDynamicStoreItem<string | boolean>("BeautifulLyrics", FallbackProvidersKey)
+	if (val === undefined || val === null) return true
+	return val === true || val === "true"
+}
 export const SetUseFallbackProviders = (enabled: boolean): void => {
 	SetDynamicStoreItem("BeautifulLyrics", FallbackProvidersKey, String(enabled))
 }
@@ -417,8 +424,39 @@ export const SetSelectedProvider = (provider: string): void => {
 
 export let SongLyrics: (TransformedLyrics | undefined) = undefined
 export let HaveSongLyricsLoaded: boolean = false
+const ResolveAppleMusicId = (trackName: string, artistName?: string, duration?: number): Promise<{ id: string; title: string } | undefined> => {
+	if (!trackName || trackName.length === 0) return Promise.resolve(undefined)
+	const searchUrl = new URL("https://itunes.apple.com/search")
+	searchUrl.searchParams.set("term", `${trackName} ${artistName ?? ""}`.trim())
+	searchUrl.searchParams.set("media", "music")
+	searchUrl.searchParams.set("entity", "song")
+	searchUrl.searchParams.set("limit", "10")
+
+	const controller = new AbortController()
+	const timeout = globalThis.setTimeout(() => controller.abort(), 3000)
+	return fetch(searchUrl.toString(), { signal: controller.signal })
+		.then(response => (!response.ok ? undefined : response.json()))
+		.then((payload?: { results?: { trackId?: number; trackName?: string; trackTimeMillis?: number }[] }) => {
+			const results = Array.isArray(payload?.results) ? payload.results : []
+			const lowerTrackName = trackName.toLowerCase()
+			const matched = results.find(result => {
+				if (result.trackId === undefined || result.trackName === undefined) return false
+				const resultTrackName = result.trackName.toLowerCase()
+				return (
+					(resultTrackName.includes(lowerTrackName) || lowerTrackName.includes(resultTrackName)) &&
+					(!Number.isFinite(duration) || (duration ?? 0) <= 0 || result.trackTimeMillis === undefined || Math.abs((result.trackTimeMillis / 1000) - (duration ?? 0)) <= 5)
+				)
+			})
+			return matched?.trackId !== undefined && matched.trackName !== undefined
+				? { id: String(matched.trackId), title: matched.trackName }
+				: undefined
+		})
+		.catch(() => undefined)
+		.finally(() => globalThis.clearTimeout(timeout))
+}
+
 const BuildLyricsRequestURL = async (song: StreamedSongMetadata): Promise<string> => {
-	const url = new URL(`https://beautiful-lyrics.socalifornian.live/lyrics/${encodeURIComponent(song.Id)}`)
+	const url = new URL(`https://lyrics.txw.qzz.io/lyrics/${encodeURIComponent(song.Id)}`)
 	const track = SpotifyPlayer.data?.item
 	const metadata = track?.metadata as unknown as (TrackMetadata | undefined)
 
@@ -457,6 +495,17 @@ const BuildLyricsRequestURL = async (song: StreamedSongMetadata): Promise<string
 			url.searchParams.set("isrc", isrc)
 		}
 	} catch { /* cache miss, proceed without ISRC */ }
+
+	// Attach Apple Music ID if resolvable client-side
+	try {
+		if (trackName !== undefined && trackName.length > 0) {
+			const appleMusic = await ResolveAppleMusicId(trackName, artistNames[0], song.Duration)
+			if (appleMusic) {
+				url.searchParams.set("apple_id", appleMusic.id)
+				url.searchParams.set("apple_title", appleMusic.title)
+			}
+		}
+	} catch { /* proceed without apple_id */ }
 
 	return url.toString()
 }
@@ -509,6 +558,36 @@ const FetchProviderWithMeta = (fetchFn: (artist: string, title: string, duration
 const UseSelectedProvider = (provider: string, song: StreamedSongMetadata): Promise<ProviderLyrics | false> => {
 	let providerPromise: Promise<ProviderLyrics | undefined>
 	switch (provider) {
+		case "txw":
+		case "spicylyrics":
+			providerPromise = FetchProviderWithMeta((artist, title) => {
+				return FetchTxwLyrics(song.Id, title, artist, undefined, song.Duration)
+			})
+			break
+		case "lrcred":
+			providerPromise = FetchProviderWithMeta(async (artist, title) => {
+				let isrc: string | undefined
+				try {
+					const trackInfo = await TrackInformationStore.GetItem(song.Id)
+					isrc = trackInfo?.external_id?.find((e: any) => e.type === "isrc")?.id
+				} catch { /* ignore */ }
+				return FetchLrcRedLyrics(artist, title, isrc, song.Duration)
+			}, song.Duration)
+			break
+		case "musixmatch":
+			providerPromise = FetchProviderWithMeta((artist, title) => {
+				let cleanTitle = title
+				for (const filter of SongNameFilters) cleanTitle = cleanTitle.replace(filter, "")
+				return FetchMusixmatchLyrics(song.Id, artist, cleanTitle.trim(), song.Duration)
+			}, song.Duration)
+			break
+		case "musixmatch-search":
+			providerPromise = FetchProviderWithMeta((artist, title) => {
+				let cleanTitle = title
+				for (const filter of SongNameFilters) cleanTitle = cleanTitle.replace(filter, "")
+				return FetchMusixmatchSearchLyrics(artist, cleanTitle.trim(), song.Duration)
+			})
+			break
 		case "lrclib":
 			providerPromise = FetchProviderWithMeta((artist, title) => {
 				let cleanTitle = title
@@ -519,8 +598,38 @@ const UseSelectedProvider = (provider: string, song: StreamedSongMetadata): Prom
 		case "spotify":
 			providerPromise = FetchDirectSpotifyLyrics(song.Id, song.InternalId)
 			break
-		case "lyricsovh":
-			providerPromise = FetchProviderWithMeta(FetchLyricsOvh)
+		case "amlldb":
+			providerPromise = FetchAMLLDBLyrics(song.Id)
+			break
+		case "deezer":
+			providerPromise = FetchProviderWithMeta((artist, title) => FetchDeezerLyrics(artist, title, song.Duration), song.Duration)
+			break
+		case "youtube":
+			providerPromise = FetchProviderWithMeta((artist, title) => FetchYouTubeLyrics(artist, title))
+			break
+		case "genius":
+			providerPromise = FetchProviderWithMeta((artist, title) => FetchGeniusLyrics(artist, title))
+			break
+		case "netease":
+			providerPromise = FetchProviderWithMeta((artist, title) => FetchNeteaseLyrics(artist, title))
+			break
+		case "qq":
+			providerPromise = FetchProviderWithMeta((artist, title) => FetchQQMusicLyrics(artist, title))
+			break
+		case "kugou":
+			providerPromise = FetchProviderWithMeta((artist, title) => FetchKugouLyrics(artist, title))
+			break
+		case "betterlyrics":
+			providerPromise = FetchProviderWithMeta(FetchBetterLyricsTTML)
+			break
+		case "betterlyrics-kugou":
+			providerPromise = FetchProviderWithMeta(FetchBetterLyricsKugou)
+			break
+		case "betterlyrics-legacy":
+			providerPromise = FetchProviderWithMeta(FetchBetterLyricsLegacy)
+			break
+		case "betterlyrics-qq":
+			providerPromise = FetchProviderWithMeta(FetchBetterLyricsQQ)
 			break
 		case "betterlyrics-unison":
 			providerPromise = FetchProviderWithMeta(FetchBetterLyricsUnison)
@@ -534,10 +643,32 @@ const UseSelectedProvider = (provider: string, song: StreamedSongMetadata): Prom
 		case "bini-line":
 			providerPromise = FetchProviderWithMeta(FetchBiniLyricsLine)
 			break
+		case "lyricsovh":
+			providerPromise = FetchProviderWithMeta(FetchLyricsOvh)
+			break
 		default:
 			providerPromise = Promise.resolve(undefined)
 	}
 	return providerPromise.then(lyrics => lyrics ?? false)
+}
+
+const isSyncedLyrics = (lyrics: any): boolean => {
+	if (!lyrics || typeof lyrics !== "object") return false
+	if (lyrics.Type === "Syllable") {
+		return Array.isArray(lyrics.Content) && lyrics.Content.length > 0
+	}
+	if (lyrics.Type === "Line") {
+		if (!Array.isArray(lyrics.Content) || lyrics.Content.length === 0) return false
+		const first = lyrics.Content[0]
+		const last = lyrics.Content[lyrics.Content.length - 1]
+		return (
+			typeof first?.StartTime === "number" &&
+			typeof last?.EndTime === "number" &&
+			last.EndTime > first.StartTime &&
+			first.EndTime > first.StartTime
+		)
+	}
+	return false
 }
 
 // Timeout helper: resolves undefined if promise takes longer than ms
@@ -548,23 +679,55 @@ const withTimeout = <T>(promise: Promise<T | undefined>, ms: number): Promise<T 
 	])
 }
 
-// Race multiple providers in parallel, resolve with first non-undefined result or undefined
-const raceProviders = (providers: (() => Promise<ProviderLyrics | undefined>)[], timeoutMs: number): Promise<ProviderLyrics | undefined> => {
+// Race multiple providers in parallel, prioritizing syllable-level or line-level synced lyrics over static lyrics
+const raceSyncedProviders = (providers: (() => Promise<ProviderLyrics | undefined>)[], timeoutMs: number): Promise<ProviderLyrics | undefined> => {
 	return new Promise(resolve => {
 		if (providers.length === 0) return resolve(undefined)
+
+		let bestSyllable: ProviderLyrics | undefined
+		let bestLine: ProviderLyrics | undefined
+		let bestStatic: ProviderLyrics | undefined
 		let pending = providers.length
-		let resolved = false
+		let isSettled = false
+
+		const settle = () => {
+			if (isSettled) return
+			isSettled = true
+			resolve(bestSyllable ?? bestLine ?? bestStatic ?? undefined)
+		}
+
+		const timer = setTimeout(() => settle(), timeoutMs)
+
 		for (const provider of providers) {
-			withTimeout(provider(), timeoutMs).then(result => {
-				if (resolved) return
-				if (result !== undefined) {
-					resolved = true
-					resolve(result)
-				} else {
+			withTimeout(provider(), timeoutMs)
+				.then(result => {
+					if (isSettled) return
+					if (result !== undefined) {
+						if (result.Type === "Syllable") {
+							bestSyllable = result
+							clearTimeout(timer)
+							settle()
+							return
+						} else if (result.Type === "Line") {
+							if (bestLine === undefined) bestLine = result
+						} else if (result.Type === "Static") {
+							if (bestStatic === undefined) bestStatic = result
+						}
+					}
 					pending--
-					if (pending === 0) resolve(undefined)
-				}
-			})
+					if (pending === 0) {
+						clearTimeout(timer)
+						settle()
+					}
+				})
+				.catch(() => {
+					if (isSettled) return
+					pending--
+					if (pending === 0) {
+						clearTimeout(timer)
+						settle()
+					}
+				})
 		}
 	})
 }
@@ -588,21 +751,47 @@ const LoadSongLyrics = () => {
 		// First determine if we have our lyrics stored already
 		ProviderLyricsStore.GetItem(songAtUpdate.Id)
 		.then(
-			providerLyrics => {
-				if (providerLyrics === undefined) { // Otherwise, get our lyrics
-					// If a specific provider is selected, use it directly
-					if (selectedProvider !== "auto") {
-						return UseSelectedProvider(selectedProvider, songAtUpdate)
-					}
+			cachedLyrics => {
+				// If we have valid synced lyrics in cache, use them immediately!
+				if (isSyncedLyrics(cachedLyrics)) {
+					return cachedLyrics
+				}
+
+				// If cached lyrics are static, hold them as a fallback candidate,
+				// but attempt to fetch synced lyrics from txw or fallback providers.
+				const cachedStaticFallback: ProviderLyrics | undefined =
+					(cachedLyrics && typeof cachedLyrics === "object" && (cachedLyrics as any).Type === "Static")
+						? (cachedLyrics as ProviderLyrics)
+						: undefined
+
+				// If a specific provider is selected, use it directly
+				if (selectedProvider !== "auto") {
+					return UseSelectedProvider(selectedProvider, songAtUpdate)
+				}
 
 				// Otherwise, use the normal chain (author backend + fallbacks)
 				return (
 					(
 						GetSpotifyAccessToken()
+						.catch(() => "test")
 						.then(
-							async (): Promise<Response | undefined> => {
-								// Author's lyrics backend is offline; skip directly to fallback providers
-								return undefined
+							async (accessToken): Promise<Response | undefined> => {
+								const token = (accessToken && accessToken.length > 0) ? accessToken : "test"
+								const controller = new AbortController()
+								const timeout = globalThis.setTimeout(() => controller.abort(), 7000)
+								const requestUrl = await BuildLyricsRequestURL(songAtUpdate)
+								return fetch(
+									requestUrl,
+									{
+										method: "GET",
+										signal: controller.signal,
+										headers: {
+											Authorization: `Bearer ${token}`,
+											"X-Spotify-App-Platform": SpotifyPlatform?.PlatformData?.app_platform ?? "Linux",
+											"X-Spotify-App-Version": SpotifyPlatform?.version ?? "1.0.0"
+										}
+									}
+								).finally(() => globalThis.clearTimeout(timeout))
 							}
 						)
 						.then(
@@ -632,13 +821,21 @@ const LoadSongLyrics = () => {
 						() => undefined as undefined
 					)
 						.then(
-							(providerLyrics) => {
-								if (providerLyrics !== undefined && providerLyrics !== null && typeof providerLyrics === "object" && typeof providerLyrics.Type === "string") return providerLyrics
-								if (GetUseFallbackProviders() === false) return undefined
+							(txwLyrics) => {
+								// If author backend returned valid synced lyrics, return immediately!
+								if (isSyncedLyrics(txwLyrics)) return txwLyrics
+								if (GetUseFallbackProviders() === false) return txwLyrics ?? cachedStaticFallback
+
+								// Keep any static lyrics (from txw or cache) as fallback
+								let staticCandidate: ProviderLyrics | undefined =
+									(txwLyrics && typeof txwLyrics === "object" && (txwLyrics as any).Type === "Static")
+										? (txwLyrics as ProviderLyrics)
+										: cachedStaticFallback
+
 								const meta = SpotifyPlayer.data?.item?.metadata as unknown as (TrackMetadata | undefined)
 								const track = SpotifyPlayer.data?.item
 								const rawTitle = meta?.title ?? track?.name
-								if (rawTitle === undefined || rawTitle.length === 0) return undefined
+								if (rawTitle === undefined || rawTitle.length === 0) return staticCandidate
 								const cleanTitle = FilterSongName(rawTitle)
 								const rawArtist = meta?.artist_name ?? ""
 								const firstArtist = (
@@ -646,63 +843,96 @@ const LoadSongLyrics = () => {
 									?? rawArtist.split(/\s*[,;&]|(?:\s+feat[.])/i).map(a => a.trim()).filter(a => a.length > 0)[0]
 									?? rawArtist
 								)
-								if (firstArtist.length === 0) return undefined
-							// Fire top providers in parallel, take the first success
-							return raceProviders([
-								() => FetchLRCLIBLyrics(firstArtist, cleanTitle.trim(), songAtUpdate.Duration),
-								() => FetchBetterLyricsUnison(firstArtist, cleanTitle),
-								() => FetchBiniLyrics(firstArtist, cleanTitle),
-								() => FetchLyricsOvh(firstArtist, cleanTitle),
-							], 4000)
-							}
-						)
-						.then(
-							(providerLyrics) => {
-								if (providerLyrics !== undefined) return providerLyrics
-								if (GetUseFallbackProviders() === false) return undefined
-								return withTimeout(FetchDirectSpotifyLyrics(songAtUpdate.Id, songAtUpdate.InternalId), 4000)
-							}
-						)
-						.then(
-							(providerLyrics) => {
-								if (providerLyrics !== undefined) return providerLyrics
-								if (GetUseFallbackProviders() === false) return undefined
-								return withTimeout(FetchProviderWithMeta(FetchLRCLIBLyrics, songAtUpdate.Duration), 4000)
-							}
-						)
-						.then(
-							(providerLyrics) => {
-								if (providerLyrics !== undefined) return providerLyrics
-								if (GetUseFallbackProviders() === false) return undefined
-								// Try LRCLIB by ISRC if available from cached track info
-								return TrackInformationStore.GetItem(songAtUpdate.Id).then(trackInfo => {
+								if (firstArtist.length === 0) return staticCandidate
+
+								// Fire top synced providers in parallel (Spotify color-lyrics, Musixmatch, LRCLIB, lrc.red, Unison TTML, Bini Word, AMLLDB)
+								return raceSyncedProviders([
+									() => FetchDirectSpotifyLyrics(songAtUpdate.Id, songAtUpdate.InternalId),
+									() => FetchMusixmatchLyrics(songAtUpdate.Id, firstArtist, cleanTitle.trim(), songAtUpdate.Duration),
+									() => FetchLRCLIBLyrics(firstArtist, cleanTitle.trim(), songAtUpdate.Duration),
+									() => FetchProviderWithMeta(async (a, t) => {
+										let isrc: string | undefined
+										try {
+											const trackInfo = await TrackInformationStore.GetItem(songAtUpdate.Id)
+											isrc = trackInfo?.external_id?.find((e: any) => e.type === "isrc")?.id
+										} catch { /* ignore */ }
+										return FetchLrcRedLyrics(a, t, isrc, songAtUpdate.Duration)
+									}, songAtUpdate.Duration),
+									() => FetchBetterLyricsUnison(firstArtist, cleanTitle),
+									() => FetchBiniLyrics(firstArtist, cleanTitle),
+									() => FetchAMLLDBLyrics(songAtUpdate.Id),
+								], 4500).then(result => {
+									if (isSyncedLyrics(result)) return result
+									if (result?.Type === "Static" && staticCandidate === undefined) staticCandidate = result
+									return undefined
+								})
+								.then(async (providerLyrics) => {
+									if (isSyncedLyrics(providerLyrics)) return providerLyrics
+									if (GetUseFallbackProviders() === false) return staticCandidate
+									const res = await withTimeout(FetchProviderWithMeta(FetchMusixmatchSearchLyrics, songAtUpdate.Duration), 4000)
+									if (isSyncedLyrics(res)) return res
+									if (res?.Type === "Static" && staticCandidate === undefined) staticCandidate = res
+									return undefined
+								})
+								.then(async (providerLyrics) => {
+									if (isSyncedLyrics(providerLyrics)) return providerLyrics
+									if (GetUseFallbackProviders() === false) return staticCandidate
+									const res = await withTimeout(FetchProviderWithMeta(FetchLRCLIBLyrics, songAtUpdate.Duration), 4000)
+									if (isSyncedLyrics(res)) return res
+									if (res?.Type === "Static" && staticCandidate === undefined) staticCandidate = res
+									return undefined
+								})
+								.then(async (providerLyrics) => {
+									if (isSyncedLyrics(providerLyrics)) return providerLyrics
+									if (GetUseFallbackProviders() === false) return staticCandidate
+									// Try LRCLIB by ISRC if available from cached track info
+									const trackInfo = await TrackInformationStore.GetItem(songAtUpdate.Id).catch(() => undefined)
 									const isrc = trackInfo?.external_id?.find((e: any) => e.type === "isrc")?.id
 									if (isrc !== undefined && isrc.length > 0) {
-										return withTimeout(FetchLRCLIBByISRC(isrc), 4000)
+										const res = await withTimeout(FetchLRCLIBByISRC(isrc), 4000)
+										if (isSyncedLyrics(res)) return res
+										if (res?.Type === "Static" && staticCandidate === undefined) staticCandidate = res
 									}
 									return undefined
 								})
-							}
-						)
-					.then(
-						(providerLyrics) => {
-							if (providerLyrics !== undefined) return providerLyrics
-							if (GetUseFallbackProviders() === false) return undefined
-							return withTimeout(FetchProviderWithMeta(FetchBetterLyricsUnison), 5000)
-						}
-					)
-						.then(
-							(providerLyrics) => {
-								if (providerLyrics !== undefined) return providerLyrics
-								if (GetUseFallbackProviders() === false) return undefined
-								return withTimeout(FetchProviderWithMeta(FetchBetterLyricsUnisonLine), 5000)
-							}
-						)
-						.then(
-							(providerLyrics) => {
-								if (providerLyrics !== undefined) return providerLyrics
-								if (GetUseFallbackProviders() === false) return undefined
-								return withTimeout(FetchProviderWithMeta(FetchBiniLyricsLine), 4000)
+								.then(async (providerLyrics) => {
+									if (isSyncedLyrics(providerLyrics)) return providerLyrics
+									if (GetUseFallbackProviders() === false) return staticCandidate
+									const res = await withTimeout(FetchProviderWithMeta(FetchBetterLyricsUnisonLine), 4000)
+									if (isSyncedLyrics(res)) return res
+									return undefined
+								})
+								.then(async (providerLyrics) => {
+									if (isSyncedLyrics(providerLyrics)) return providerLyrics
+									if (GetUseFallbackProviders() === false) return staticCandidate
+									const res = await withTimeout(FetchProviderWithMeta(FetchBiniLyricsLine), 4000)
+									if (isSyncedLyrics(res)) return res
+									return undefined
+								})
+								.then(async (providerLyrics) => {
+									if (isSyncedLyrics(providerLyrics)) return providerLyrics
+									if (GetUseFallbackProviders() === false) return staticCandidate
+									const res = await withTimeout(FetchProviderWithMeta(FetchBetterLyricsTTML), 4000)
+									if (isSyncedLyrics(res)) return res
+									return undefined
+								})
+								.then(async (providerLyrics) => {
+									if (isSyncedLyrics(providerLyrics)) return providerLyrics
+									if (GetUseFallbackProviders() === false) return staticCandidate
+									const res = await withTimeout(FetchProviderWithMeta(FetchBetterLyricsKugou), 4000)
+									if (isSyncedLyrics(res)) return res
+									return undefined
+								})
+								.then(async (providerLyrics) => {
+									if (isSyncedLyrics(providerLyrics)) return providerLyrics
+									// If we already have a static candidate from txw or prior fallbacks, use it
+									if (staticCandidate !== undefined) return staticCandidate
+									if (GetUseFallbackProviders() === false) return undefined
+									// As true last resort, try static-only providers
+									const ovh = await withTimeout(FetchProviderWithMeta(FetchLyricsOvh), 2500)
+									if (ovh !== undefined) return ovh
+									return withTimeout(FetchProviderWithMeta(FetchGeniusLyrics), 2500)
+								})
 							}
 						)
 						.then(
@@ -712,10 +942,7 @@ const LoadSongLyrics = () => {
 								return lyrics
 							}
 						)
-					)
-				} else {
-					return providerLyrics
-				}
+				)
 			}
 		)
 		.then(
@@ -737,7 +964,7 @@ const LoadSongLyrics = () => {
 								SetRomanizationSeparator(
 									GetDynamicStoreItem<string>("BeautifulLyrics", "RomanizationSeparator") ?? ""
 								),
-								TransformProviderLyrics(storedProviderLyrics)
+								TransformProviderLyrics(storedProviderLyrics, songAtUpdate.Duration)
 								.catch(() => storedProviderLyrics as TransformedLyrics)
 							)
 						)
@@ -1071,9 +1298,14 @@ OnSpotifyReady.then(
 				caches.open("Player_ProviderLyrics").then(c => c.delete(`/${songId}`))
 				caches.open("Player_TransformedLyrics").then(c => c.delete(`/${songId}`))
 			}
-			const OnProviderChanged = () => {
-				if (Song?.Type === "Streamed") {
-					ClearSongCache(Song.Id)
+			const OnProviderChanged = async () => {
+				try {
+					await caches.delete("Player_ProviderLyrics")
+					await caches.delete("Player_TransformedLyrics")
+				} catch (_) {
+					if (Song?.Type === "Streamed") {
+						ClearSongCache(Song.Id)
+					}
 				}
 				LoadSongLyrics()
 			}

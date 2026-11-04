@@ -8,6 +8,8 @@ import {
 	GetFullscreenDarkness, SetFullscreenDarkness,
 	GetRomanizationSeparator, SetRomanizationSeparator,
 	GetFontSize, SetFontSize,
+	GetLyricsAnimation, SetLyricsAnimation, LyricsAnimationLabels, type LyricsAnimationMode,
+	GetLyricsAnimationScale, SetLyricsAnimationScale,
 } from "../Shared.ts"
 import Icons from "./Icons.ts"
 
@@ -42,6 +44,7 @@ const createLabel = (text: string) => {
 }
 
 const createToggle = (initial: boolean, onChange: (v: boolean) => void) => {
+	let isEnabled = initial
 	const toggle = document.createElement("button")
 	toggle.style.width = "36px"
 	toggle.style.height = "20px"
@@ -65,16 +68,18 @@ const createToggle = (initial: boolean, onChange: (v: boolean) => void) => {
 	toggle.appendChild(knob)
 
 	const update = (enabled: boolean) => {
+		isEnabled = enabled
 		toggle.style.background = enabled ? "#1ed760" : "#535353"
 		knob.style.left = enabled ? "18px" : "2px"
+		toggle.setAttribute("aria-checked", String(enabled))
 	}
 	update(initial)
 	toggle.addEventListener("click", () => {
-		const next = !((toggle.style.background === "#1ed760") ? true : false)
+		const next = !isEnabled
 		update(next)
 		onChange(next)
 	})
-	return toggle
+	return { toggle, update }
 }
 
 // Detect system fonts (common ones)
@@ -129,17 +134,30 @@ export const ShowSettingsModal = (): void => {
 
 	// --- Fallback Toggle ---
 	{
+		const container = document.createElement("div")
+		container.style.display = "flex"
+		container.style.flexDirection = "column"
+		container.style.gap = "4px"
+
 		const row = createRow()
 		const label = createLabel("Use Fallback Providers")
 		label.style.flex = "1"
-		const toggle = createToggle(GetUseFallbackProviders(), ToggleUseFallbackProviders)
+		const { toggle, update: updateToggle } = createToggle(GetUseFallbackProviders(), ToggleUseFallbackProviders)
 		UseFallbackProvidersChanged.Connect((v) => {
-			toggle.style.background = v ? "#1ed760" : "#535353"
-			toggle.firstElementChild && ((toggle.firstElementChild as HTMLElement).style.left = v ? "18px" : "2px")
+			updateToggle(v)
 		})
 		row.appendChild(label)
 		row.appendChild(toggle)
-		content.appendChild(row)
+		container.appendChild(row)
+
+		const hint = document.createElement("span")
+		hint.textContent = "When OFF, Beautiful Lyrics strictly uses the selected provider without auto-changing or falling back."
+		hint.style.fontSize = "11px"
+		hint.style.color = "#888"
+		hint.style.lineHeight = "1.3"
+		container.appendChild(hint)
+
+		content.appendChild(container)
 	}
 
 	// --- Divider ---
@@ -151,6 +169,65 @@ export const ShowSettingsModal = (): void => {
 		return d
 	}
 	content.appendChild(divider())
+
+	// --- Lyrics Sync Animation ---
+	{
+		const row = createRow()
+		const label = createLabel("Lyrics Animation")
+		const select = document.createElement("select")
+		Object.assign(select.style, sharedSelectStyles)
+
+		const animationModes: LyricsAnimationMode[] = ["fluid", "karaoke", "bouncy", "subtle", "classic"]
+		for (const mode of animationModes) {
+			const optEl = document.createElement("option")
+			optEl.value = mode
+			optEl.textContent = LyricsAnimationLabels[mode]
+			select.appendChild(optEl)
+		}
+		select.value = GetLyricsAnimation()
+
+		select.addEventListener("change", () => SetLyricsAnimation(select.value as LyricsAnimationMode))
+		row.appendChild(label)
+		row.appendChild(select)
+		content.appendChild(row)
+	}
+
+	// --- Active Lyric Zoom / Scale Slider ---
+	{
+		const row = createRow()
+		row.style.flexWrap = "wrap"
+		const label = createLabel("Active Lyric Zoom")
+		label.style.flex = "1"
+
+		const value = document.createElement("span")
+		value.style.fontSize = "13px"
+		value.style.color = "#999"
+
+		const slider = document.createElement("input")
+		slider.type = "range"
+		slider.min = "100"
+		slider.max = "120"
+		slider.step = "1"
+		slider.style.flex = "0 0 100%"
+		slider.style.marginTop = "4px"
+
+		const updateSlider = (v: number) => {
+			slider.value = String(v)
+			value.textContent = v === 106 ? `${v}% (Default)` : `${v}%`
+		}
+		updateSlider(GetLyricsAnimationScale())
+
+		slider.addEventListener("input", () => {
+			const v = Number(slider.value)
+			SetLyricsAnimationScale(v)
+			value.textContent = v === 106 ? `${v}% (Default)` : `${v}%`
+		})
+
+		row.appendChild(label)
+		row.appendChild(value)
+		row.appendChild(slider)
+		content.appendChild(row)
+	}
 
 	// --- Font Selector ---
 	{

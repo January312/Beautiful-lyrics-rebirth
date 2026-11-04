@@ -8213,7 +8213,7 @@
 			 */
 			DictionaryLoader.prototype.load = function (load_callback) {
 				var dic = this.dic;
-				var dic_path = this.dic_path;
+				var dic_path = (this.dic_path || "").replace(/\/+$/, "");
 				var loadArrayBuffer = this.loadArrayBuffer;
 
 				async.parallel([

@@ -84,6 +84,37 @@
 	cursor: pointer;
 }
 
+/* Enable selecting text by dragging mouse across lyrics (Copy Lyrics extension style) */
+.LyricsScrollContainer,
+.Lyrics,
+.VocalsGroup,
+.Vocals,
+.Lyric,
+.Word,
+.Letter,
+.Line,
+.Syllable,
+.Static {
+	-webkit-user-select: text !important;
+	-moz-user-select: text !important;
+	user-select: text !important;
+}
+
+.Interlude,
+.InterludeDot,
+.ViewControls,
+.Controls,
+.Header {
+	-webkit-user-select: none !important;
+	-moz-user-select: none !important;
+	user-select: none !important;
+}
+
+.copy-lyrics-selecting,
+.copy-lyrics-selecting * {
+	cursor: text !important;
+}
+
 .VocalsGroup:is(button).AlignedOpposite {
 	align-items: flex-end;
 }
@@ -319,7 +350,78 @@
 .Vocals.Lead.Active .Line {
 	--gradient-offset: 0%;
 
-	scale: 1.05;
+	scale: var(--bl-active-scale, 1.05);
+}
+
+/* Lyrics Animation Modes (Vivi Music / MetroLyrics / Apple Music / Kinetic) */
+html.bl-anim-fluid,
+.LyricsScrollContainer.bl-anim-fluid {
+	.Vocals.Lead {
+		transition: opacity 0.35s cubic-bezier(0.2, 0, 0, 1), filter 0.35s ease !important;
+	}
+	.Vocals.Lead .Line {
+		transition: scale 0.35s cubic-bezier(0.2, 0, 0, 1), background-color 0.35s cubic-bezier(0.2, 0, 0, 1) !important;
+	}
+	.Vocals.Lead.Active .Line {
+		scale: var(--bl-active-scale, 1.06);
+		text-shadow: 0 0 12px rgba(255, 255, 255, 0.45), 0 0 24px rgba(255, 255, 255, 0.2);
+	}
+	.Vocals.Active .Synced {
+		text-shadow: 0 0 var(--text-shadow-blur-radius, 10px) rgba(255, 255, 255, var(--text-shadow-opacity, 65%)), 0 0 20px rgba(255, 255, 255, 0.35);
+	}
+}
+
+html.bl-anim-karaoke,
+.LyricsScrollContainer.bl-anim-karaoke {
+	.Vocals.Lead .Line {
+		transition: scale 0.25s cubic-bezier(0.3, 0, 0.2, 1), background-color 0.25s ease !important;
+	}
+	.Vocals.Lead.Active .Line {
+		scale: var(--bl-active-scale, 1.04);
+		text-shadow: 0 0 14px rgba(255, 255, 255, 0.6);
+	}
+	.Vocals.Active .Synced {
+		--gradient-color-alpha-active: 1;
+		text-shadow: 0 0 var(--text-shadow-blur-radius, 8px) rgba(255, 255, 255, var(--text-shadow-opacity, 50%));
+	}
+}
+
+html.bl-anim-bouncy,
+.LyricsScrollContainer.bl-anim-bouncy {
+	.Vocals.Lead .Line {
+		transition: scale 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+	}
+	.Vocals.Lead.Active .Line {
+		scale: var(--bl-active-scale, 1.08);
+		transform: translateY(-2px);
+		text-shadow: 0 0 16px rgba(255, 255, 255, 0.5), 0 0 28px rgba(255, 255, 255, 0.25);
+	}
+}
+
+html.bl-anim-subtle,
+.LyricsScrollContainer.bl-anim-subtle {
+	.Vocals.Lead {
+		transition: opacity 0.4s ease !important;
+	}
+	.Vocals.Lead .Line {
+		transition: opacity 0.4s ease, scale 0.4s ease !important;
+	}
+	.Vocals.Lead.Active .Line {
+		scale: var(--bl-active-scale, 1.01);
+		text-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
+	}
+}
+
+html.bl-anim-classic,
+.LyricsScrollContainer.bl-anim-classic {
+	.Vocals.Lead .Line {
+		transition: none !important;
+	}
+	.Vocals.Lead.Active .Line {
+		scale: 1 !important;
+		transform: none !important;
+		text-shadow: none !important;
+	}
 }
 
 .NaturallyAlignedLeft .Line {

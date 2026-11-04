@@ -76,7 +76,7 @@ export default class LineVocals implements SyncedVocals, Giveable {
 
 		// Define our start/end times
 		this.StartTime = lineMetadata.StartTime
-		this.Duration = (lineMetadata.EndTime - lineMetadata.StartTime)
+		this.Duration = Math.max(0.2, (lineMetadata.EndTime - lineMetadata.StartTime))
 
 		// Create our main span element
 		const syllableSpan = this.Maid.Give(document.createElement('span'))

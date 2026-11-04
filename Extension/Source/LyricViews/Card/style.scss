@@ -109,6 +109,12 @@
 			transition: opacity .2s;
 
 			--ViewControlSize: 30px;
+
+			#CopyLyrics svg {
+				height: calc(var(--ViewControlSize) * 0.4);
+				width: auto;
+				aspect-ratio: 1;
+			}
 		}
 	}
 
